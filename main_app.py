@@ -3,7 +3,6 @@ from tkinter import *
 from tkinter import ttk
 
 
-
 class CalcApp:
 
     def __init__(self, master):    
@@ -14,7 +13,7 @@ class CalcApp:
         notebook = ttk.Notebook(master)
         notebook.pack()
         
-        self.main_canvas = Canvas(notebook)
+        self.main_canvas = Canvas(notebook, width=500, height=600)
         self.main_canvas.pack()
 
 #---------------------------------------------------------------------------------------------------

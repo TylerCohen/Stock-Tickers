@@ -110,6 +110,7 @@ def getNews(symbol):
     return requestNews(symbol);
 '''
 
+'''
 if __name__ == '__main__':
     try:
         symbols = sys.argv[1]
@@ -120,3 +121,4 @@ if __name__ == '__main__':
 
     #print(json.dumps(getNews("GOOG"), indent=2))
     print(json.dumps(getQuotes(symbols), indent=2))        
+'''

@@ -10,19 +10,23 @@ class Main_app:
 
     def __init__(self, master):    
         
-        master.title('Stock Traker Pro')
-        master.resizable(False, False)
+        self.master = master
+        self.master.title('Stock Traker Pro')
+        self.master.resizable(True, True)
+        #master.config(bg='black')
 
-        notebook = ttk.Notebook(master)
-        notebook.pack()
+        notebook = ttk.Notebook(self.master)
+        notebook.pack(fill=BOTH,side=TOP)
 
         h,w = 400,500
         self.main_canvas = Canvas(notebook, width=w, height=w)
         self.settings_canvas = Canvas(notebook, width=w, height=h)
         notebook.add(self.main_canvas, text='Main')
         notebook.add(self.settings_canvas, text='Settings')
+        #self.main_canvas.config(bg='black')
 
-        ttk.Button(self.main_canvas, text='Place Trade', width=12, command=self.stock_window).place(x=w-20, y=h+70,anchor='se')
+        self.button_placetrade = ttk.Button(self.main_canvas, text='Place Trade', width=12, command=self.open_stock_window)
+        self.button_placetrade.place(x=w-20, y=h+70,anchor='se')
         self.account_value = 100000
         self.stock_value = 0
         self.derivatives_value = 0
@@ -38,33 +42,42 @@ class Main_app:
         self.main_canvas.create_line(w/2,75,w/2,h+70)
         self.balances_frame = Canvas(self.main_canvas, width=w/2-30,height=h-50)
         self.balances_frame.place(x=25,y=80)
-        #self.scrollbar = ttk.Scrollbar(self.balances_frame)
-        #self.scrollbar.pack(fill=Y, side=RIGHT)
-        #self.balances_frame.config(yscrollcommand=self.scrollbar.set)
-        #self.scrollbar.config(command=self.balances_frame.yview)
-        self.balances_label = ttk.Label(self.balances_frame, 
-                                        text='Account value: ' + '${:,.2f}'.format(self.account_value) +
-                                        '\nCash balance: '+'${:,.2f}'.format(self.available_cash) +
-                                        '\nStock value: ' + '${:,.2f}'.format(self.stock_value) +
-                                        '\nDerivatives value: ' + '${:,.2f}'.format(self.derivatives_value) +
-                                        '\nAvailable Margin: ' + '${:,.2f}'.format(self.margin_balance),
+        self.scrollbar = ttk.Scrollbar(self.balances_frame)
+        self.scrollbar.pack(fill=Y, side=RIGHT)
+        self.balances_frame.config(yscrollcommand=self.scrollbar.set)
+        self.scrollbar.config(command=self.balances_frame.yview())
+        self.balances_str= StringVar()
+        self.refresh_balances()
+        self.balances_label = ttk.Label(self.balances_frame,
+                                        textvariable=self.balances_str,
                                         font=('calibri', 12), wraplength=w/2-30)
         self.balances_label.pack()
 
+    def open_stock_window(self):
+        self.quote_window = Place_trade(self)
+        self.button_placetrade.config(command=self.close_stock_window)
+        self.button_placetrade.config(text='Hide Quote\n Window')
+    
+    def close_stock_window(self):
+        self.quote_window.canvas.destroy()
+        self.quote_window.quotethread.stop()
+        self.button_placetrade.config(command=self.open_stock_window)
+        self.button_placetrade.config(text='Place Trade')
 
-    def stock_window(self):
-        window = Place_trade(self)
+    def refresh_balances(self):
+        self.balances_str.set(''.join(['Account value: ' , '${:,.2f}'.format(self.account_value) 
+                    ,'\nCash balance: ','${:,.2f}'.format(self.available_cash) ,'\nStock value: ' 
+                    , '${:,.2f}'.format(self.stock_value) +'\nDerivatives value: ' 
+                    , '${:,.2f}'.format(self.derivatives_value) ,'\nAvailable Margin: ' , '${:,.2f}'.format(self.margin_balance)]))
 
 
 class Place_trade:
 
     def __init__(self, master):
         self.master = master
-        self.top = Toplevel()
-        self.top.resizable(False, False)
         w,h = 400,200
-        self.canvas = Canvas(self.top, width = w, height = h)
-        self.canvas.pack()
+        self.canvas = Canvas(self.master.master, width = w, height = h)
+        self.canvas.pack(side=BOTTOM)
         self.canvas.create_line(w/2,0,w/2,h,width=1)
 
         ttk.Label(self.canvas, text='Real-time Quote',
@@ -94,10 +107,10 @@ class Place_trade:
         try:
             threading.enumerate().index(self.quotethread)
             self.quotethread.stop()
-            self.quotethread = QuoteThread(self.thread_id,'quote_thread',1, 600,
+            self.quotethread = QuoteThread(self.thread_id,'quote_thread',.5, 600,
                                            self.tickers.get(),self.ticker_quote)
         except (ValueError, AttributeError):
-            self.quotethread = QuoteThread(self.thread_id,'quote_thread',1, 600, 
+            self.quotethread = QuoteThread(self.thread_id,'quote_thread',.5, 600, 
                                            self.tickers.get(),self.ticker_quote)
         self.quotethread.start()
         self.thread_id += 1
@@ -108,26 +121,30 @@ class Place_trade:
             self.trade_amount.config(text = 'Estimated Cost: '+ '${:,.2f}'.format(self.trade_cost)
                                      +'\n\nAvailable Cash: '+ '${:,.2f}'.format(self.master.available_cash))
         except ValueError:
-            self.trade_amount.config(text = 'Input a positive whole amount')
+            self.trade_amount.config(text = 'Input a whole amount')
             self.trade_cost = 0
         except urllib.error.HTTPError:
             self.trade_amount.config(text = 'Input a valid ticker')
             self.trade_cost=0
     
     def excecute_trade(self):
+        self.calc_trade_cost('dummy')
         if self.master.available_cash < self.trade_cost:
             self.trade_amount.config(text = 'Not enough available cash')
         elif self.trade_cost == 0: 
             self.trade_amount.config(text = 'Construct potential trade')
         else:
-            self.calc_trade_cost('dummy')
             self.master.available_cash -= self.trade_cost
-            self.calc_trade_cost('dummy')
+            self.master.stock_value += self.trade_cost
+            self.trade_amount.config(text = 'Trade Successful, ticket generated')
+            self.master.refresh_balances()
+
 
 
 class QuoteThread(threading.Thread):
     def __init__(self, threadID, name, delay, timeout, tickers, label):
         threading.Thread.__init__(self)
+        self.daemon = True
         self.threadID = threadID
         self.name = name
         self.timeout = timeout
@@ -152,13 +169,15 @@ class QuoteThread(threading.Thread):
                 break
             else:
                 try:
-                   self.label.config(text=last_price(self.tickers) + '\n' +
-                                last_trade_time(self.tickers) + '\nID: ' + ticker_id(self.tickers))
+                    self.label_str = ''.join([last_price(self.tickers), '\n' ,
+                                last_trade_time(self.tickers) , '\nID: ' + ticker_id(self.tickers)])
+                    if self.stop_event.is_set(): break
+                    self.label.config(text=self.label_str)
                 except urllib.error.HTTPError:
                     self.label.config(text='ticker does not exist')
                     return -1
                     break
-            time.sleep(self.delay)
+            self.stop_event.wait(self.delay)
             self.timeout -= 1
 
 
